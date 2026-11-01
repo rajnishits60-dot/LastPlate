@@ -1,0 +1,93 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SurplusLink</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#eef3f0;--card:#fff;--ink:#10231c;--mut:#5b6f66;--ac:#1f7a5a;--ac2:#dcefe6;--amb:#e09b00;--red:#d64933;--bd:#d3ddd7}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.w{max-width:880px;margin:0 auto;padding:18px 14px 48px}h1,h2,h3{font-family:Georgia,serif;margin:0}h1{font-size:30px}h3{font-size:18px;margin:14px 0 4px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.sub{color:var(--mut);margin:4px 0 14px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:14px}
+label{display:block;font-size:14px;font-weight:600;margin-top:8px}
+input,select{width:100%;margin-top:3px;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+.b{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:10px 16px;font:700 15px inherit;cursor:pointer;margin-top:12px}
+.b.s{background:var(--ac2);color:var(--ink);margin:0;padding:7px 13px}.b.r{background:none;color:var(--red);border:1px solid var(--red);margin:0;padding:6px 12px}.b.o{background:none;color:var(--ink);border:1px solid var(--bd);margin:0}
+.m{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:11px 0;border-top:1px solid var(--bd)}.m:first-child{border-top:0}
+.mut{color:var(--mut);font-size:14px}.bt{display:flex;gap:8px}.v{font:700 19px Georgia,serif}
+.tag{display:inline-block;padding:1px 10px;border-radius:99px;font-size:13px;font-weight:700;background:var(--ac2)}.tag.x{color:var(--red)}.tag.w{color:var(--amb)}
+.g{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.k b{font:700 30px Georgia,serif;display:block}
+.lm{height:250px;border-radius:10px;margin:8px 0;border:1px solid var(--bd)}.cd{font:700 32px Georgia,serif;letter-spacing:.2em}.qr{background:#fff;padding:6px;width:110px;border-radius:8px}.ring{display:flex;gap:14px;align-items:center}.tk{font-size:22px;line-height:1}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script></head><body><div class="w">
+<div class="top"><div><h1>SurplusLink</h1><div class="sub">Rescue surplus food before it spoils.</div></div><div id="who"></div></div>
+<p id="st" class="mut" role="status"></p><main id="app"></main></div>
+<script>
+const CFG={
+  url:"https://gmgrjfafmnuszuyjqkxx.supabase.co",
+  key:"sb_publishable_oVquTNeE3cveUvttsNnWaw_RxJmklBv"
+};
+const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const WIN={cooked:4,bakery:24,produce:48,packaged:168},TY={cooked:"Cooked meals",bakery:"Bakery",produce:"Fresh produce",packaged:"Packaged"},CENTER=[26.1445,91.7362];
+const kmd=(a,b)=>{const t=x=>x*Math.PI/180,p=t(b[0]-a[0]),q=t(b[1]-a[1]),h=Math.sin(p/2)**2+Math.cos(t(a[0]))*Math.cos(t(b[0]))*Math.sin(q/2)**2;return 12742*Math.asin(Math.sqrt(h))*1.3};
+const LB={accepted:"accepted",enroute:"on the way",collected:"picked up",locked:"locked"},ACT=["accepted","enroute"];
+let SB,me=null,prof=null,profs=[],reqs=[],codes={},F={},last=null,dirty=false,watch=null,sub=false;const MP={};
+const msg=t=>$("#st").textContent=t||"";
+const v=(k,d)=>esc(F[k]??d),inp=(k,l,d,t="text")=>`<label>${l}<input data-k="${k}" type="${t}" value="${v(k,d)}"></label>`;
+const sel=(k,l,a,d)=>`<label>${l}<select data-k="${k}">${a.map(x=>{const[o,t]=Array.isArray(x)?x:[x,x];return`<option value="${o}"${(F[k]??d)==o?" selected":""}>${t}</option>`}).join("")}</select></label>`;
+const mut=t=>`<p class="mut">${t}</p>`,tg=s=>`<span class="tag ${["rejected","locked"].includes(s)?"x":s=="pending"?"w":""}">${LB[s]||s}</span>`,P=id=>profs.find(p=>p.id==id);
+function mk(key,init){if(!MP[key]){const el=document.createElement("div");el.className="lm";const map=L.map(el).setView(CENTER,12);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);MP[key]={el,map,ly:L.layerGroup().addTo(map)};init(MP[key])}return MP[key]}
+const dot=(ll,c)=>L.circleMarker(ll,{radius:9,color:"#fff",weight:2,fillColor:c,fillOpacity:1});
+const pin=ll=>{F.ll=ll;const m=MP.reg;m.ly.clearLayers();dot(ll,"#1f7a5a").addTo(m.ly);m.map.setView(ll,15);$("#ll").textContent="Location set: "+ll.map(x=>x.toFixed(4)).join(", ")};
+const regMap=()=>{mk("reg",m=>m.map.on("click",e=>pin([e.latlng.lat,e.latlng.lng])));return`<label>Pin your location</label><div data-k2="reg"></div><div class="mut" id="ll">${F.ll?"Location set: "+F.ll.map(x=>x.toFixed(4)).join(", "):"Click the map to place your pin."}</div><button class="b o" data-a="gps" style="margin-top:8px">Use my GPS</button>`};
+function live(r){const d=P(r.donor_id),dl=d?[d.lat,d.lng]:CENTER,m=mk("live-"+r.id,m=>{dot(dl,"#1f7a5a").addTo(m.map).bindTooltip("Donor",{permanent:true,direction:"top"});m.truck=L.marker(dl,{icon:L.divIcon({html:"🚚",className:"tk",iconSize:[26,26]})});m.map.setView(dl,14)});
+if(r.ngo_lat){const t=[r.ngo_lat,r.ngo_lng];m.truck.setLatLng(t);if(!m.map.hasLayer(m.truck))m.truck.addTo(m.map);if(!m.fit){m.map.fitBounds([t,dl],{padding:[30,30]});m.fit=1}}return`<div data-k2="live-${r.id}"></div>`}
+const mount=()=>document.querySelectorAll("[data-k2]").forEach(ph=>{const m=MP[ph.dataset.k2];if(m){ph.appendChild(m.el);m.map.invalidateSize()}});
+const qr=t=>{try{const q=qrcode(0,"M");q.addData(t);q.make();return q.createSvgTag({cellSize:4,margin:0,scalable:true})}catch(e){return""}};
+const eta=r=>{const d=P(r.donor_id);return r.ngo_lat&&d?Math.round(kmd([r.ngo_lat,r.ngo_lng],[d.lat,d.lng])*2.5)+" min away":"waiting for the NGO's location"};
+async function boot(s){me=s?.user||null;prof=null;if(me)await load();render();if(me&&!sub){sub=true;SB.channel("sl").on("postgres_changes",{event:"*",schema:"public",table:"requests"},load).on("postgres_changes",{event:"*",schema:"public",table:"profiles"},load).subscribe()}}
+async function load(){if(!me)return;prof=(await SB.from("profiles").select("*").eq("id",me.id).maybeSingle()).data;
+if(prof){profs=(await SB.from("profiles").select("*")).data||[];reqs=(await SB.from("requests").select("*").order("created_at",{ascending:false})).data||[];
+if(prof.role=="donor"){codes={};((await SB.from("request_codes").select("*")).data||[]).forEach(c=>codes[c.request_id]=c.code)}
+if(prof.role=="ngo"&&reqs.some(r=>r.status=="enroute"))track()}render()}
+function track(){if(watch!=null||!navigator.geolocation)return;let t=0;watch=navigator.geolocation.watchPosition(g=>{if(Date.now()-t<5000)return;t=Date.now();reqs.filter(r=>r.status=="enroute").forEach(r=>SB.from("requests").update({ngo_lat:g.coords.latitude,ngo_lng:g.coords.longitude}).eq("id",r.id))},()=>msg("Location blocked. Allow location so the donor can track you."),{enableHighAccuracy:true})}
+function render(){if(document.activeElement?.matches?.("#app input,#app select")){dirty=true;return}dirty=false;
+$("#who").innerHTML=me?`<span class="tag">${prof?esc(prof.name)+" · "+prof.role+(prof.status!="approved"?" · "+prof.status:""):esc(me.email)}</span> <button class="b o" data-a="out">Sign out</button>`:"";
+$("#app").innerHTML=!me?vAuth():!prof?vReg():prof.status!="approved"?vWait():({admin:vAdmin,donor:vDonor,ngo:vNgo})[prof.role]();mount()}
+document.addEventListener("focusout",()=>{if(dirty)setTimeout(render,0)});
+document.addEventListener("input",e=>{if(e.target.dataset.k)F[e.target.dataset.k]=e.target.value});
+document.addEventListener("click",e=>{const b=e.target.closest("[data-a]");if(b)Promise.resolve(act[b.dataset.a]?.(b.dataset.i)).catch(x=>msg(x.message||"Something went wrong."))});
+const vAuth=()=>`<div class="c"><h2>Sign in</h2><p class="sub">New here? Create an account, then register as a donor, an NGO or an admin.</p>${inp("em","Email","","email")}${inp("pw","Password","","password")}<div class="bt"><button class="b" data-a="in">Sign in</button><button class="b o" data-a="up" style="margin-top:12px">Create account</button></div></div>`;
+const vReg=()=>`<div class="c"><h2>Register</h2><p class="sub">Choose your role. Donors and NGOs are reviewed by an admin before they can use the platform.</p>${sel("rl","I am a",[["donor","Donor (hotel, hall, mess, shop)"],["ngo","NGO or shelter"],["admin","Admin"]],"donor")}${inp("nm","Name or organisation","")}${F.rl=="ngo"?inp("cp","Meals you can take per day","100","number"):""}${F.rl=="admin"?mut("Admin accounts stay pending until the site owner approves them in the database."):regMap()}<button class="b" data-a="reg">Submit registration</button></div>`;
+const vWait=()=>`<div class="c"><h2>${prof.status=="rejected"?"Registration rejected":"Waiting for approval"}</h2>${mut(prof.status=="rejected"?"An admin did not approve this registration.":"An admin will review your registration. This page updates automatically when you are approved.")}</div>`;
+function vAdmin(){const A=reqs.filter(r=>r.status=="collected"),kg=A.reduce((s,r)=>s+ +r.kg,0),L=profs.filter(p=>p.role!="admin").sort((a,b)=>(a.status=="pending"?0:1)-(b.status=="pending"?0:1)),
+row=p=>`<div class="m"><div><b>${esc(p.name)}</b> <span class="tag">${p.role=="ngo"?"NGO":"Donor"}</span> ${tg(p.status)}<div class="mut">${p.role=="ngo"?"takes "+p.capacity+" meals/day":"donor"}</div></div><div class="bt">${p.status!="approved"?`<button class="b s" data-a="ok" data-i="${p.id}">Approve</button>`:""}${p.status!="rejected"?`<button class="b r" data-a="no" data-i="${p.id}">${p.status=="approved"?"Revoke":"Reject"}</button>`:""}</div></div>`;
+return`<div class="g">${[[A.reduce((s,r)=>s+r.meals,0),"meals rescued"],[kg,"kg diverted"],[Math.round(kg*2.5),"kg CO₂e avoided"],[reqs.filter(r=>r.status=="pending").length,"requests waiting"]].map(x=>`<div class="c k"><b>${x[0]}</b><span class="mut">${x[1]}</span></div>`).join("")}</div><div class="c"><h3>Donors and NGOs</h3>${L.map(row).join("")||mut("No registrations yet.")}</div>`}
+function pick(x){if(x.status=="collected")return mut("Pickup verified. Thank you for rescuing "+x.meals+" meals.");if(x.status=="locked")return mut("Too many wrong codes. This pickup is locked. Contact the admin.");
+if(!ACT.includes(x.status))return"";const c=codes[x.id];return`<div class="mut">${x.status=="enroute"?"NGO is on the way, "+eta(x)+".":"Accepted. Live tracking starts when the NGO leaves."}</div>${live(x)}<div class="ring"><div class="qr">${qr("SURPLUSLINK:"+x.id+":"+c)}</div><div><div class="mut">Pickup code. Share only with the NGO at handover.</div><div class="cd">${c||""}</div></div></div>`}
+function vDonor(){let r="";if(last){const m=last.rem<=0?"Past the safe window. Send to compost or biogas.":last.rem<1.5?"Urgent. Hand over within the hour.":"Safe for people for "+last.rem.toFixed(1)+" more hours.";
+r=`<div class="c"><div class="v">${m}</div><div class="mut">${esc(last.food)} · ${last.kg} kg · about ${last.meals} meals</div>${last.rem>0?`<h3>Approved NGOs that can reach you in time</h3>${last.ngos.map((o,i)=>`<div class="m"><div><b>${esc(o.p.name)}</b> ${i==0?'<span class="tag">Best fit</span>':""}<div class="mut">${o.d.toFixed(1)} km by road · about ${Math.round(o.tr)} min</div></div>${last.sent[o.p.id]?'<span class="tag">Sent</span>':`<button class="b s" data-a="send" data-i="${i}">Send pickup request</button>`}</div>`).join("")||mut("No approved NGO can reach you in time yet.")}`:""}</div>`}
+return`<div class="c"><h2>List surplus food</h2><div class="g">${inp("fd","Food","Veg biryani and dal")}${sel("ty","Food type",Object.entries(TY),"cooked")}${inp("kg","Quantity (kg)","18","number")}${inp("hr","Hours since cooked","1.5","number")}${sel("fr","Stored in fridge?",[["0","No"],["1","Yes"]],"0")}</div><button class="b" data-a="chk">Check safety and find NGOs</button></div>${r}<div class="c"><h3>My requests</h3>${reqs.map(x=>`<div class="m"><div><b>${esc(x.food)}</b> · ${x.kg} kg<div class="mut">to ${esc(P(x.ngo_id)?.name||"NGO")}</div></div>${tg(x.status)}</div>${pick(x)}`).join("")||mut("No requests yet.")}</div>`}
+function vNgo(){const Pn=reqs.filter(r=>r.status=="pending"),Ak=reqs.filter(r=>ACT.includes(r.status)),H=reqs.filter(r=>["rejected","collected","locked"].includes(r.status)),dn=r=>P(r.donor_id)?.name||"Donor";
+return`<div class="c"><h3>Active pickups</h3>${Ak.map(x=>`<div style="border-top:1px solid var(--bd);padding:8px 0"><b>${esc(x.food)}</b> · ${x.kg} kg · ${esc(dn(x))}${live(x)}${x.status=="accepted"?`<button class="b" data-a="start" data-i="${x.id}">Start pickup and share my location</button>`:`<label>Ask the donor for their 6-digit code or QR<input data-k="vc${x.id}" inputmode="numeric" placeholder="Enter code" value="${v("vc"+x.id,"")}"></label><button class="b" data-a="ver" data-i="${x.id}">Verify and collect</button>`}</div>`).join("")||mut("No active pickups.")}</div>
+<div class="c"><h3>Pickup requests</h3>${Pn.map(x=>`<div class="m"><div><b>${esc(x.food)}</b> <span class="tag">${x.meals} meals</span><div class="mut">From ${esc(dn(x))} · ${x.kg} kg · within ${x.mins} min</div></div><div class="bt"><button class="b s" data-a="acc" data-i="${x.id}">Accept</button><button class="b r" data-a="rej" data-i="${x.id}">Reject</button></div></div>`).join("")||mut("No pending requests. They appear here live.")}</div>
+<div class="c"><h3>History</h3>${H.map(x=>`<div class="m"><div><b>${esc(x.food)}</b><div class="mut">${esc(dn(x))} · ${x.kg} kg</div></div>${tg(x.status)}</div>`).join("")||mut("Nothing yet.")}</div>`}
+const setReq=(i,o)=>SB.from("requests").update(o).eq("id",i).then(({error})=>{if(error)throw error});
+const act={
+in:async()=>{const{error}=await SB.auth.signInWithPassword({email:F.em,password:F.pw});msg(error?.message)},
+up:async()=>{const{data,error}=await SB.auth.signUp({email:F.em,password:F.pw});msg(error?error.message:data.session?"":"Check your email to confirm your account, then sign in.")},
+out:async()=>{await SB.auth.signOut();if(watch!=null)navigator.geolocation.clearWatch(watch);watch=null;F={};last=null},
+gps:()=>navigator.geolocation?.getCurrentPosition(g=>pin([g.coords.latitude,g.coords.longitude]),()=>$("#ll").textContent="GPS blocked. Click the map instead."),
+reg:async()=>{const rl=F.rl||"donor",nm=(F.nm||"").trim();if(!nm)return msg("Enter your name.");if(rl!="admin"&&!F.ll)return msg("Pin your location on the map first.");
+const{error}=await SB.from("profiles").insert({id:me.id,role:rl,name:nm,lat:rl=="admin"?null:F.ll[0],lng:rl=="admin"?null:F.ll[1],capacity:rl=="ngo"?+(F.cp||100):null});if(error)return msg(error.message);msg("");F={};await load()},
+ok:i=>SB.from("profiles").update({status:"approved"}).eq("id",i).then(load),no:i=>SB.from("profiles").update({status:"rejected"}).eq("id",i).then(load),
+chk:()=>{const ty=F.ty||"cooked",kg=+(F.kg||18),hr=+(F.hr||1.5),fr=(F.fr||"0")=="1",win=WIN[ty]*(fr&&ty!="packaged"?2:1),rem=win-hr,meals=Math.round(kg*2.5);
+const ngos=profs.filter(p=>p.role=="ngo"&&p.status=="approved").map(p=>{const d=kmd([prof.lat,prof.lng],[p.lat,p.lng]);return{p,d,tr:d*2.5,sc:100-d*4+(p.capacity>=meals?20:-15)}}).filter(o=>rem*60>o.tr+15).sort((a,b)=>b.sc-a.sc);
+last={food:F.fd||"Veg biryani and dal",kg,rem,meals,ngos,sent:{}};render()},
+send:async i=>{const o=last.ngos[i],{error}=await SB.from("requests").insert({donor_id:me.id,ngo_id:o.p.id,food:last.food,kg:last.kg,meals:last.meals,mins:Math.round(last.rem*60)});if(error)return msg(error.message);last.sent[o.p.id]=1;await load()},
+acc:i=>setReq(i,{status:"accepted"}).then(load),rej:i=>setReq(i,{status:"rejected"}).then(load),
+start:async i=>{await setReq(i,{status:"enroute"});track();await load()},
+ver:async i=>{const c=((F["vc"+i]||"").match(/\d{6}/)||[""])[0],{data,error}=await SB.rpc("verify_pickup",{rid:i,c});if(error)return msg(error.message);
+msg({ok:"Verified. Pickup complete.",wrong:"Code does not match.",locked:"Too many wrong codes. This pickup is locked.",invalid:"This pickup can no longer be verified."}[data]);F["vc"+i]="";await load()}};
+if(CFG.url.startsWith("PASTE")||typeof L=="undefined"||typeof supabase=="undefined")$("#app").innerHTML='<div class="c"><h2>Setup needed</h2><p class="mut">Paste your Supabase URL and anon key into the CFG line near the top of index.html, and make sure you are online so the map and Supabase libraries can load.</p></div>';
+else{SB=supabase.createClient(CFG.url,CFG.key);SB.auth.getSession().then(({data})=>boot(data.session));SB.auth.onAuthStateChange((e,s)=>{if(e=="SIGNED_IN"||e=="SIGNED_OUT")boot(s)})}
+</script></body></html>
